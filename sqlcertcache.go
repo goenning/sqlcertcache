@@ -16,14 +16,14 @@ import (
 // Making sure that we're adhering to the autocert.Cache interface.
 var _ autocert.Cache = (*Cache)(nil)
 
-// Cache provides a Postgres backend to the autocert cache.
+// Cache provides a SQL backend to the autocert cache.
 type Cache struct {
 	conn      *sql.DB
 	tableName string
 }
 
 // New creates an cache instance that can be used with autocert.Cache.
-// It returns any errors that could happen while connecting to Postgres.
+// It returns any errors that could happen while connecting to SQL.
 func New(conn *sql.DB, tableName string) (*Cache, error) {
 	if strings.TrimSpace(tableName) == "" {
 		return nil, errors.New("tableName must not be empty")
