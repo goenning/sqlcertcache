@@ -108,6 +108,23 @@ func TestDelete_UnkownKey(t *testing.T) {
 	expectNil(t, err)
 }
 
+func TestPut_Overwrite(t *testing.T) {
+	conn := getConnection()
+	cache, _ := sqlcertcache.New(conn, "autocert_cache")
+
+	data1 := []byte{1, 2, 3, 4}
+	err := cache.Put(context.Background(), "thekey", data1)
+	expectNil(t, err)
+	data, err := cache.Get(context.Background(), "thekey")
+	expectEquals(t, data, data1)
+
+	data2 := []byte{5, 6, 7, 8}
+	err = cache.Put(context.Background(), "thekey", data2)
+	expectNil(t, err)
+	data, err = cache.Get(context.Background(), "thekey")
+	expectEquals(t, data, data2)
+}
+
 func TestDifferentTableName(t *testing.T) {
 	conn := getConnection()
 	cache, _ := sqlcertcache.New(conn, "cert_store")
