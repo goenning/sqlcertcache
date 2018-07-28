@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"golang.org/x/crypto/acme/autocert"
 )
@@ -19,6 +20,8 @@ var _ autocert.Cache = (*Cache)(nil)
 // Cache provides a SQL backend to the autocert cache.
 type Cache struct {
 	conn        *sql.DB
+	certs       map[string][]byte
+	certsMu     sync.RWMutex
 	getQuery    string
 	insertQuery string
 	updateQuery string
@@ -42,6 +45,7 @@ func New(conn *sql.DB, tableName string) (*Cache, error) {
 
 	return &Cache{
 		conn:        conn,
+		certs:       make(map[string][]byte),
 		getQuery:    fmt.Sprintf(`SELECT data FROM %s`, tableName),
 		insertQuery: fmt.Sprintf(`INSERT INTO %s (key, data) VALUES($1, $2)`, tableName),
 		updateQuery: fmt.Sprintf(`UPDATE %s SET data = $2 WHERE key = $1`, tableName),
@@ -51,8 +55,15 @@ func New(conn *sql.DB, tableName string) (*Cache, error) {
 
 // Get returns a certificate data for the specified key.
 // If there's no such key, Get returns ErrCacheMiss.
-func (c Cache) Get(ctx context.Context, key string) ([]byte, error) {
-	var data []byte
+func (c *Cache) Get(ctx context.Context, key string) ([]byte, error) {
+	c.certsMu.RLock()
+	defer c.certsMu.RUnlock()
+
+	data, ok := c.certs[key]
+	if ok {
+		return data, nil
+	}
+
 	row := c.conn.QueryRowContext(ctx, c.getQuery)
 	err := row.Scan(&data)
 	if err == sql.ErrNoRows {
@@ -62,7 +73,10 @@ func (c Cache) Get(ctx context.Context, key string) ([]byte, error) {
 }
 
 // Put stores the data in the cache under the specified key.
-func (c Cache) Put(ctx context.Context, key string, data []byte) error {
+func (c *Cache) Put(ctx context.Context, key string, data []byte) error {
+	c.certsMu.Lock()
+	defer c.certsMu.Unlock()
+
 	result, err := c.conn.ExecContext(ctx, c.updateQuery, key, data)
 	if err != nil {
 		return err
@@ -80,12 +94,21 @@ func (c Cache) Put(ctx context.Context, key string, data []byte) error {
 		}
 	}
 
+	c.certs[key] = data
 	return nil
 }
 
 // Delete removes a certificate data from the cache under the specified key.
 // If there's no such key in the cache, Delete returns nil.
-func (c Cache) Delete(ctx context.Context, key string) error {
+func (c *Cache) Delete(ctx context.Context, key string) error {
+	c.certsMu.Lock()
+	defer c.certsMu.Unlock()
+
+	_, ok := c.certs[key]
+	if ok {
+		delete(c.certs, key)
+	}
+
 	_, err := c.conn.ExecContext(ctx, c.deleteQuery, key)
 	if err != nil {
 		return err
