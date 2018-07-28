@@ -141,3 +141,14 @@ func TestDifferentTableName(t *testing.T) {
 	err = conn.QueryRow("SELECT COUNT(*) FROM autocert_cache").Scan(&count)
 	expectNotNil(t, err)
 }
+
+func TestGet_CancelledContext(t *testing.T) {
+	conn := getConnection()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	cache, _ := sqlcertcache.New(conn, "autocert_cache")
+	data, err := cache.Get(ctx, "my-key")
+	expectEquals(t, err, context.Canceled)
+	expectEquals(t, len(data), 0)
+}
