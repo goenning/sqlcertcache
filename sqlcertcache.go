@@ -37,7 +37,9 @@ func New(conn *sql.DB, tableName string) (*Cache, error) {
 
 	_, err := conn.Exec(fmt.Sprintf(`create table if not exists %s (
 		key  varchar(400) not null primary key, 
-		data bytea not null
+		data bytea not null,
+		created_at timestamptz not null,
+		updated_at timestamptz null 
 	);`, tableName))
 	if err != nil {
 		return nil, err
@@ -46,9 +48,9 @@ func New(conn *sql.DB, tableName string) (*Cache, error) {
 	return &Cache{
 		conn:        conn,
 		certs:       make(map[string][]byte),
-		getQuery:    fmt.Sprintf(`SELECT data FROM %s`, tableName),
-		insertQuery: fmt.Sprintf(`INSERT INTO %s (key, data) VALUES($1, $2)`, tableName),
-		updateQuery: fmt.Sprintf(`UPDATE %s SET data = $2 WHERE key = $1`, tableName),
+		getQuery:    fmt.Sprintf(`SELECT data::bytea FROM %s`, tableName),
+		insertQuery: fmt.Sprintf(`INSERT INTO %s (key, data, created_at) VALUES($1, $2::bytea, now())`, tableName),
+		updateQuery: fmt.Sprintf(`UPDATE %s SET data = $2::bytea, updated_at = now() WHERE key = $1`, tableName),
 		deleteQuery: fmt.Sprintf(`DELETE FROM %s WHERE key = $1`, tableName),
 	}, nil
 }
