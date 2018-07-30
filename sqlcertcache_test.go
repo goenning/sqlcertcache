@@ -3,6 +3,7 @@ package sqlcertcache_test
 import (
 	"context"
 	"database/sql"
+	"io/ioutil"
 	"reflect"
 	"testing"
 
@@ -64,7 +65,7 @@ func TestGet_AfterPut(t *testing.T) {
 	conn := getConnection()
 	cache, _ := sqlcertcache.New(conn, "autocert_cache")
 
-	actual := []byte{1, 2, 3, 4}
+	actual, _ := ioutil.ReadFile("./LICENSE")
 	err := cache.Put(context.Background(), "my-key", actual)
 	expectNil(t, err)
 
