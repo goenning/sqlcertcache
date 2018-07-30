@@ -31,6 +31,11 @@ s := &http.Server{
 s.ListenAndServeTLS("", "")
 ```
 
+## Performance
+
+This is just a reminder that autocert has an internal in-memory cache that is used before quering this long-term cache.
+So you don't need to worry about your SQL database being hit many times just to get a certificate. It should only do once per process+key.
+
 ## Thanks
 
 Inspired by https://github.com/danilobuerger/autocert-s3-cache
