@@ -23,8 +23,7 @@ var _ autocert.Cache = (*Cache)(nil)
 type Cache struct {
 	conn        *sql.DB
 	getQuery    string
-	insertQuery string
-	updateQuery string
+	putQuery    string
 	deleteQuery string
 }
 
@@ -46,10 +45,12 @@ func New(conn *sql.DB, tableName string) (*Cache, error) {
 	}
 
 	return &Cache{
-		conn:        conn,
-		getQuery:    fmt.Sprintf(`SELECT data::bytea FROM %s WHERE key = $1`, tableName),
-		insertQuery: fmt.Sprintf(`INSERT INTO %s (key, data, created_at) VALUES($1, $2::bytea, now())`, tableName),
-		updateQuery: fmt.Sprintf(`UPDATE %s SET data = $2::bytea, updated_at = now() WHERE key = $1`, tableName),
+		conn:     conn,
+		getQuery: fmt.Sprintf(`SELECT data::bytea FROM %s WHERE key = $1`, tableName),
+		putQuery: fmt.Sprintf(`
+			INSERT INTO %s (key, data, created_at) VALUES($1, $2::bytea, now())
+			ON CONFLICT (key) DO UPDATE SET data = $2::bytea
+		`, tableName),
 		deleteQuery: fmt.Sprintf(`DELETE FROM %s WHERE key = $1`, tableName),
 	}, nil
 }
@@ -68,23 +69,10 @@ func (c *Cache) Get(ctx context.Context, key string) ([]byte, error) {
 
 // Put stores the data in the cache under the specified key.
 func (c *Cache) Put(ctx context.Context, key string, data []byte) error {
-	result, err := c.conn.ExecContext(ctx, c.updateQuery, key, data)
+	_, err := c.conn.ExecContext(ctx, c.putQuery, key, data)
 	if err != nil {
 		return err
 	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rowsAffected == 0 {
-		_, err := c.conn.ExecContext(ctx, c.insertQuery, key, data)
-		if err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
